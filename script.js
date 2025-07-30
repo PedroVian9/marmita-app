@@ -22,6 +22,18 @@ const resumoDiv = document.getElementById('resumo');
 const dataHojeSpan = document.getElementById('dataHoje');
 const questionSection = document.getElementById('questionSection');
 const registradoSection = document.getElementById('registradoSection');
+const naoRegistradoSection = document.getElementById('naoRegistradoSection');
+
+// Novos elementos
+const alterarValorBtn = document.getElementById('alterarValorBtn');
+const historicoBtn = document.getElementById('historicoBtn');
+const salvarNovoValorBtn = document.getElementById('salvarNovoValor');
+const cancelarAlteracaoBtn = document.getElementById('cancelarAlteracao');
+const novoValorInput = document.getElementById('novoValorMarmita');
+const valorAtualSpan = document.getElementById('valorAtual');
+const voltarHistoricoBtn = document.getElementById('voltarHistorico');
+const mesSelect = document.getElementById('mesSelect');
+const anoSelect = document.getElementById('anoSelect');
 
 let currentUser = null;
 let precoMarmita = 0;
@@ -44,7 +56,8 @@ function atualizarDataHoje() {
 
 function atualizarResumo(registros) {
   const mesAtual = formatarDataHoje().slice(0, 7);
-  const dias = Object.keys(registros || {}).filter(d => d.startsWith(mesAtual));
+  const dias = Object.keys(registros || {})
+    .filter(d => d.startsWith(mesAtual) && registros[d] === true);
   const total = dias.length * precoMarmita;
 
   // Obter nome do mês em português
@@ -63,17 +76,139 @@ function atualizarResumo(registros) {
 
 function verificarRegistroHoje(registros) {
   const hoje = formatarDataHoje();
-  const jaRegistrou = registros && registros[hoje];
+  const registro = registros && registros[hoje];
   
-  if (jaRegistrou) {
+  if (registro === true) {
     questionSection.classList.add('hidden');
     registradoSection.classList.remove('hidden');
+    naoRegistradoSection.classList.add('hidden');
+  } else if (registro === false) {
+    questionSection.classList.add('hidden');
+    registradoSection.classList.add('hidden');
+    naoRegistradoSection.classList.remove('hidden');
   } else {
     questionSection.classList.remove('hidden');
     registradoSection.classList.add('hidden');
+    naoRegistradoSection.classList.add('hidden');
   }
 }
 
+function mostrarTela(tela) {
+  // Esconder todas as telas
+  document.getElementById('auth').classList.add('hidden');
+  document.getElementById('config').classList.add('hidden');
+  document.getElementById('main').classList.add('hidden');
+  document.getElementById('alterarValor').classList.add('hidden');
+  document.getElementById('historico').classList.add('hidden');
+  
+  // Mostrar a tela desejada
+  document.getElementById(tela).classList.remove('hidden');
+}
+
+function populateYearSelect() {
+  const currentYear = new Date().getFullYear();
+  anoSelect.innerHTML = '<option value="">Selecione o ano</option>';
+  
+  for (let year = currentYear; year >= currentYear - 5; year--) {
+    const option = document.createElement('option');
+    option.value = year;
+    option.textContent = year;
+    anoSelect.appendChild(option);
+  }
+}
+
+function carregarHistorico() {
+  const mes = mesSelect.value;
+  const ano = anoSelect.value;
+  
+  if (!mes || !ano) {
+    document.getElementById('historicoResultados').classList.add('hidden');
+    document.getElementById('nenhumDado').classList.add('hidden');
+    return;
+  }
+  
+  const periodo = `${ano}-${mes}`;
+  
+  try {
+    const registrosRef = ref(database, `users/${currentUser.uid}/registros`);
+    get(registrosRef).then((snapshot) => {
+      const registros = snapshot.val() || {};
+      const configRef = ref(database, `users/${currentUser.uid}/config/historico`);
+      
+      get(configRef).then((configSnapshot) => {
+        const historicoPrecos = configSnapshot.val() || {};
+        
+        // Filtrar registros do período
+        const registrosPeriodo = Object.keys(registros)
+          .filter(data => data.startsWith(periodo))
+          .sort()
+          .map(data => ({
+            data,
+            tipo: registros[data],
+            valor: historicoPrecos[data] || precoMarmita
+          }));
+        
+        if (registrosPeriodo.length === 0) {
+          document.getElementById('historicoResultados').classList.add('hidden');
+          document.getElementById('nenhumDado').classList.remove('hidden');
+          return;
+        }
+        
+        // Calcular totais
+        const marmitasComidas = registrosPeriodo.filter(r => r.tipo === true);
+        const totalGasto = marmitasComidas.reduce((sum, r) => sum + r.valor, 0);
+        
+        // Mostrar resumo do mês
+        const nomesMeses = [
+          'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+        ];
+        const nomeMes = nomesMeses[parseInt(mes) - 1];
+        
+        document.getElementById('resumoMes').innerHTML = `
+          <h3>📊 Resumo de ${nomeMes}/${ano}</h3>
+          <div class="resumo-stats">
+            <div class="stat">
+              <span class="stat-number">${marmitasComidas.length}</span>
+              <span class="stat-label">Marmitas</span>
+            </div>
+            <div class="stat">
+              <span class="stat-number">R$ ${totalGasto.toFixed(2).replace('.', ',')}</span>
+              <span class="stat-label">Total Gasto</span>
+            </div>
+          </div>
+        `;
+        
+        // Mostrar lista de registros
+        let listaHTML = '<div class="lista-header"><h4>📅 Registros do Mês</h4></div>';
+        
+        registrosPeriodo.forEach(registro => {
+          const dataFormatada = formatarDataBrasileira(registro.data);
+          const tipoIcon = registro.tipo === true ? '✅' : '❌';
+          const tipoTexto = registro.tipo === true ? 'SIM' : 'NÃO';
+          const valorTexto = registro.tipo === true ? `R$ ${registro.valor.toFixed(2).replace('.', ',')}` : 'R$ 0,00';
+          const itemClass = registro.tipo === true ? 'item-sim' : 'item-nao';
+          
+          listaHTML += `
+            <div class="registro-item ${itemClass}">
+              <div class="registro-data">${dataFormatada}</div>
+              <div class="registro-tipo">${tipoIcon} ${tipoTexto}</div>
+              <div class="registro-valor">${valorTexto}</div>
+            </div>
+          `;
+        });
+        
+        document.getElementById('listaMarmitas').innerHTML = listaHTML;
+        document.getElementById('historicoResultados').classList.remove('hidden');
+        document.getElementById('nenhumDado').classList.add('hidden');
+      });
+    });
+  } catch (error) {
+    console.error('Erro ao carregar histórico:', error);
+  }
+}
+
+// Event Listeners
 loginBtn.onclick = async () => {
   try {
     const provider = new GoogleAuthProvider();
@@ -92,10 +227,50 @@ logoutBtn.onclick = async () => {
   }
 };
 
+alterarValorBtn.onclick = () => {
+  valorAtualSpan.textContent = precoMarmita.toFixed(2).replace('.', ',');
+  novoValorInput.value = '';
+  mostrarTela('alterarValor');
+};
+
+historicoBtn.onclick = () => {
+  populateYearSelect();
+  mostrarTela('historico');
+};
+
+cancelarAlteracaoBtn.onclick = () => {
+  mostrarTela('main');
+};
+
+voltarHistoricoBtn.onclick = () => {
+  mostrarTela('main');
+};
+
+mesSelect.onchange = carregarHistorico;
+anoSelect.onchange = carregarHistorico;
+
+salvarNovoValorBtn.onclick = async () => {
+  const novoValor = parseFloat(novoValorInput.value);
+  if (novoValor > 0) {
+    try {
+      precoMarmita = novoValor;
+      const configRef = ref(database, `users/${currentUser.uid}/config`);
+      await set(configRef, { precoMarmita: novoValor });
+      alert('Valor atualizado com sucesso! O novo valor se aplicará apenas às próximas marmitas.');
+      mostrarTela('main');
+      carregarRegistros();
+    } catch (error) {
+      console.error('Erro ao salvar novo valor:', error);
+      alert('Erro ao salvar novo valor. Tente novamente.');
+    }
+  } else {
+    alert('Por favor, insira um valor válido maior que zero.');
+  }
+};
+
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
-    document.getElementById('auth').classList.add('hidden');
     document.getElementById('userName').innerText = `${user.displayName}`;
     atualizarDataHoje();
 
@@ -105,12 +280,10 @@ onAuthStateChanged(auth, async (user) => {
       const data = snapshot.val();
       
       if (!data || !data.precoMarmita) {
-        document.getElementById('config').classList.remove('hidden');
-        document.getElementById('main').classList.add('hidden');
+        mostrarTela('config');
       } else {
         precoMarmita = data.precoMarmita;
-        document.getElementById('config').classList.add('hidden');
-        document.getElementById('main').classList.remove('hidden');
+        mostrarTela('main');
         carregarRegistros();
       }
     } catch (error) {
@@ -118,9 +291,7 @@ onAuthStateChanged(auth, async (user) => {
     }
   } else {
     currentUser = null;
-    document.getElementById('auth').classList.remove('hidden');
-    document.getElementById('main').classList.add('hidden');
-    document.getElementById('config').classList.add('hidden');
+    mostrarTela('auth');
     resumoDiv.innerHTML = '';
   }
 });
@@ -132,8 +303,7 @@ salvarValorBtn.onclick = async () => {
       precoMarmita = valor;
       const configRef = ref(database, `users/${currentUser.uid}/config`);
       await set(configRef, { precoMarmita: valor });
-      document.getElementById('config').classList.add('hidden');
-      document.getElementById('main').classList.remove('hidden');
+      mostrarTela('main');
       carregarRegistros();
     } catch (error) {
       console.error('Erro ao salvar configuração:', error);
@@ -161,21 +331,34 @@ simBtn.onclick = async () => {
   try {
     const hoje = formatarDataHoje();
     const registroRef = ref(database, `users/${currentUser.uid}/registros/${hoje}`);
+    const historicoRef = ref(database, `users/${currentUser.uid}/config/historico/${hoje}`);
+    
     await set(registroRef, true);
+    await set(historicoRef, precoMarmita);
     
     // Atualizar a interface imediatamente
     questionSection.classList.add('hidden');
     registradoSection.classList.remove('hidden');
+    naoRegistradoSection.classList.add('hidden');
   } catch (error) {
     console.error('Erro ao registrar marmita:', error);
     alert('Erro ao registrar. Tente novamente.');
   }
 };
 
-naoBtn.onclick = () => {
-  // Criar uma animação de feedback
-  naoBtn.style.transform = 'scale(0.95)';
-  setTimeout(() => {
-    naoBtn.style.transform = 'scale(1)';
-  }, 150);
+naoBtn.onclick = async () => {
+  try {
+    const hoje = formatarDataHoje();
+    const registroRef = ref(database, `users/${currentUser.uid}/registros/${hoje}`);
+    
+    await set(registroRef, false);
+    
+    // Atualizar a interface imediatamente
+    questionSection.classList.add('hidden');
+    registradoSection.classList.add('hidden');
+    naoRegistradoSection.classList.remove('hidden');
+  } catch (error) {
+    console.error('Erro ao registrar:', error);
+    alert('Erro ao registrar. Tente novamente.');
+  }
 };

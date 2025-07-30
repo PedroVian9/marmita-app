@@ -35,6 +35,11 @@
                 </div>
                 <button id="logoutBtn" class="btn-secondary btn-small">Sair</button>
             </div>
+
+            <div class="navigation-buttons">
+                <button id="alterarValorBtn" class="btn-settings">⚙️ Alterar Valor</button>
+                <button id="historicoBtn" class="btn-settings">📊 Histórico</button>
+            </div>
             
             <div class="today-section">
                 <div class="date-display">
@@ -58,9 +63,92 @@
                         <p class="next-register">Volte amanhã para registrar novamente.</p>
                     </div>
                 </div>
+
+                <div id="naoRegistradoSection" class="registered-section hidden">
+                    <div class="no-message">
+                        <div class="no-icon">📝</div>
+                        <h3>Dia registrado!</h3>
+                        <p>Você registrou que NÃO almoçou marmita hoje.</p>
+                        <p class="next-register">Volte amanhã para registrar novamente.</p>
+                    </div>
+                </div>
             </div>
             
             <div id="resumo" class="resumo-section"></div>
+        </div>
+
+        <!-- Tela de Alterar Valor -->
+        <div id="alterarValor" class="config-screen hidden">
+            <div class="config-content">
+                <div class="config-icon">💰</div>
+                <h2>Alterar Valor da Marmita</h2>
+                <p class="config-description">
+                    ⚠️ <strong>Atenção:</strong> Esta alteração só afetará as <strong>novas marmitas</strong>.<br>
+                    As marmitas já registradas manterão seus valores originais.
+                </p>
+                <div class="current-value">
+                    <p>Valor atual: <strong>R$ <span id="valorAtual">0,00</span></strong></p>
+                </div>
+                <div class="input-group">
+                    <span class="currency">R$</span>
+                    <input type="number" id="novoValorMarmita" placeholder="15,00" step="0.01" min="0">
+                </div>
+                <div class="button-group">
+                    <button id="salvarNovoValor" class="btn-primary btn-large">Salvar Novo Valor</button>
+                    <button id="cancelarAlteracao" class="btn-secondary btn-large">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tela de Histórico -->
+        <div id="historico" class="historico-screen hidden">
+            <div class="header">
+                <h2>📊 Histórico de Marmitas</h2>
+                <button id="voltarHistorico" class="btn-secondary btn-small">← Voltar</button>
+            </div>
+            
+            <div class="historico-content">
+                <div class="periodo-selector">
+                    <div class="selector-group">
+                        <label for="mesSelect">Mês:</label>
+                        <select id="mesSelect">
+                            <option value="">Selecione o mês</option>
+                            <option value="01">Janeiro</option>
+                            <option value="02">Fevereiro</option>
+                            <option value="03">Março</option>
+                            <option value="04">Abril</option>
+                            <option value="05">Maio</option>
+                            <option value="06">Junho</option>
+                            <option value="07">Julho</option>
+                            <option value="08">Agosto</option>
+                            <option value="09">Setembro</option>
+                            <option value="10">Outubro</option>
+                            <option value="11">Novembro</option>
+                            <option value="12">Dezembro</option>
+                        </select>
+                    </div>
+                    
+                    <div class="selector-group">
+                        <label for="anoSelect">Ano:</label>
+                        <select id="anoSelect">
+                            <option value="">Selecione o ano</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="historicoResultados" class="historico-resultados hidden">
+                    <div id="resumoMes" class="resumo-mes"></div>
+                    <div id="listaMarmitas" class="lista-marmitas"></div>
+                </div>
+
+                <div id="nenhumDado" class="nenhum-dado hidden">
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <h3>Nenhum registro encontrado</h3>
+                        <p>Não há registros de marmitas para o período selecionado.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
