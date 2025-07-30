@@ -2,8 +2,12 @@ import { auth, database } from './firebase-config.js';
 import { 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInWithRedirect,
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  setPersistence, 
+  browserLocalPersistence, 
+  browserSessionPersistence 
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { 
   ref, 
@@ -12,6 +16,37 @@ import {
   onValue 
 } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
 
+// Verifica se é Safari
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+// Configuração de persistência
+async function initAuth() {
+  try {
+    // Tenta usar localStorage primeiro
+    await setPersistence(auth, browserLocalPersistence);
+    console.log("Persistência configurada como LOCAL (permanente)");
+    
+    // Verifica se o storage está disponível (especialmente para Safari)
+    if (isSafari) {
+      try {
+        localStorage.setItem('test', 'test');
+        localStorage.removeItem('test');
+      } catch (e) {
+        console.warn("LocalStorage bloqueado no Safari - usando session");
+        await setPersistence(auth, browserSessionPersistence);
+      }
+    }
+  } catch (error) {
+    console.error("Erro ao configurar persistência:", error);
+    // Fallback para session persistence se local falhar
+    await setPersistence(auth, browserSessionPersistence);
+  }
+}
+
+// Inicializa a autenticação
+initAuth();
+
+// Elementos da interface
 const loginBtn = document.getElementById('loginBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const simBtn = document.getElementById('simBtn');
@@ -23,8 +58,6 @@ const dataHojeSpan = document.getElementById('dataHoje');
 const questionSection = document.getElementById('questionSection');
 const registradoSection = document.getElementById('registradoSection');
 const naoRegistradoSection = document.getElementById('naoRegistradoSection');
-
-// Novos elementos
 const alterarValorBtn = document.getElementById('alterarValorBtn');
 const historicoBtn = document.getElementById('historicoBtn');
 const salvarNovoValorBtn = document.getElementById('salvarNovoValor');
@@ -38,6 +71,7 @@ const anoSelect = document.getElementById('anoSelect');
 let currentUser = null;
 let precoMarmita = 0;
 
+// Funções auxiliares
 function formatarDataHoje() {
   return new Date().toISOString().split('T')[0];
 }
@@ -60,7 +94,6 @@ function atualizarResumo(registros) {
     .filter(d => d.startsWith(mesAtual) && registros[d] === true);
   const total = dias.length * precoMarmita;
 
-  // Obter nome do mês em português
   const [ano, mes] = mesAtual.split('-');
   const meses = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -94,14 +127,11 @@ function verificarRegistroHoje(registros) {
 }
 
 function mostrarTela(tela) {
-  // Esconder todas as telas
   document.getElementById('auth').classList.add('hidden');
   document.getElementById('config').classList.add('hidden');
   document.getElementById('main').classList.add('hidden');
   document.getElementById('alterarValor').classList.add('hidden');
   document.getElementById('historico').classList.add('hidden');
-  
-  // Mostrar a tela desejada
   document.getElementById(tela).classList.remove('hidden');
 }
 
@@ -138,7 +168,6 @@ function carregarHistorico() {
       get(configRef).then((configSnapshot) => {
         const historicoPrecos = configSnapshot.val() || {};
         
-        // Filtrar registros do período
         const registrosPeriodo = Object.keys(registros)
           .filter(data => data.startsWith(periodo))
           .sort()
@@ -154,11 +183,9 @@ function carregarHistorico() {
           return;
         }
         
-        // Calcular totais
         const marmitasComidas = registrosPeriodo.filter(r => r.tipo === true);
         const totalGasto = marmitasComidas.reduce((sum, r) => sum + r.valor, 0);
         
-        // Mostrar resumo do mês
         const nomesMeses = [
           'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
           'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
@@ -179,7 +206,6 @@ function carregarHistorico() {
           </div>
         `;
         
-        // Mostrar lista de registros
         let listaHTML = '<div class="lista-header"><h4>📅 Registros do Mês</h4></div>';
         
         registrosPeriodo.forEach(registro => {
@@ -211,11 +237,25 @@ function carregarHistorico() {
 // Event Listeners
 loginBtn.onclick = async () => {
   try {
+    // Configura persistência antes de fazer login
+    await setPersistence(auth, browserLocalPersistence);
+    
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    provider.setCustomParameters({
+      prompt: 'select_account' // Força a seleção de conta sempre
+    });
+    
+    // Tenta primeiro com popup
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (popupError) {
+      console.warn('Popup falhou, tentando redirecionamento:', popupError);
+      // Fallback para redirecionamento
+      await signInWithRedirect(auth, provider);
+    }
   } catch (error) {
     console.error('Erro no login:', error);
-    alert('Erro ao fazer login. Tente novamente.');
+    alert('Erro ao fazer login: ' + error.message);
   }
 };
 
@@ -227,6 +267,7 @@ logoutBtn.onclick = async () => {
   }
 };
 
+// Outros event listeners (mantidos iguais)
 alterarValorBtn.onclick = () => {
   valorAtualSpan.textContent = precoMarmita.toFixed(2).replace('.', ',');
   novoValorInput.value = '';
@@ -268,6 +309,7 @@ salvarNovoValorBtn.onclick = async () => {
   }
 };
 
+// Verificação de estado de autenticação
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
@@ -336,7 +378,6 @@ simBtn.onclick = async () => {
     await set(registroRef, true);
     await set(historicoRef, precoMarmita);
     
-    // Atualizar a interface imediatamente
     questionSection.classList.add('hidden');
     registradoSection.classList.remove('hidden');
     naoRegistradoSection.classList.add('hidden');
@@ -353,7 +394,6 @@ naoBtn.onclick = async () => {
     
     await set(registroRef, false);
     
-    // Atualizar a interface imediatamente
     questionSection.classList.add('hidden');
     registradoSection.classList.add('hidden');
     naoRegistradoSection.classList.remove('hidden');
@@ -362,3 +402,15 @@ naoBtn.onclick = async () => {
     alert('Erro ao registrar. Tente novamente.');
   }
 };
+
+// Verificação imediata ao carregar a página
+document.addEventListener('DOMContentLoaded', () => {
+  const user = auth.currentUser;
+  if (user) {
+    console.log("Usuário recuperado do estado persistente:", user.email);
+    currentUser = user;
+    document.getElementById('userName').innerText = user.displayName;
+    mostrarTela('main');
+    carregarRegistros();
+  }
+});
